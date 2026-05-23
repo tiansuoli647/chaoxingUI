@@ -1101,11 +1101,25 @@ class AI(Tiku):
             return None
 
     def _init_tiku(self):
-        self.endpoint = self._conf['endpoint']
-        self.key = self._conf['key']
-        self.model = self._conf['model']
-        self.http_proxy = self._conf['http_proxy']
-        self.min_interval_seconds = int(self._conf['min_interval_seconds'])
+        self.endpoint = self._conf.get('endpoint', '')
+        self.key = self._conf.get('key', '')
+        
+        # Robust default model selection
+        self.model = self._conf.get('model', '')
+        if not self.model or not self.model.strip():
+            if 'deepseek' in (self.endpoint or '').lower():
+                self.model = 'deepseek-chat'
+            else:
+                self.model = 'gpt-3.5-turbo'
+        else:
+            self.model = self.model.strip()
+            
+        self.http_proxy = self._conf.get('http_proxy', '')
+        
+        try:
+            self.min_interval_seconds = int(self._conf.get('min_interval_seconds', 3) or 3)
+        except (ValueError, TypeError):
+            self.min_interval_seconds = 3
 
     def check_llm_connection(self) -> bool:
         """

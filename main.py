@@ -8,7 +8,12 @@ import time
 import traceback
 from concurrent.futures.thread import ThreadPoolExecutor
 from dataclasses import dataclass
-from queue import PriorityQueue, ShutDown
+from queue import PriorityQueue
+try:
+    from queue import ShutDown
+except ImportError:
+    class ShutDown(Exception):
+        pass
 from threading import RLock
 from typing import Any
 
@@ -311,7 +316,11 @@ class JobProcessor:
 
         self.task_queue.join()
         time.sleep(0.5)
-        self.task_queue.shutdown()
+        if hasattr(self.task_queue, "shutdown"):
+            self.task_queue.shutdown()
+        else:
+            for i in range(self.worker_num):
+                self.task_queue.put(ChapterTask(index=-9999 - i, point={"title": "SHUTDOWN_SENTINEL"}))
 
 
     @log_error
@@ -320,6 +329,9 @@ class JobProcessor:
         while True:
             try:
                 task = self.task_queue.get()
+                if task is None or task.index < -9000:
+                    logger.info("Queue shut down via sentinel")
+                    return
             except ShutDown:
                 logger.info("Queue shut down")
                 return

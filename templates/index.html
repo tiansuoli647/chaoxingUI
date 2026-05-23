@@ -1,0 +1,2082 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>学习通全自动刷课 | 北极光控制台</title>
+    
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+    
+    <!-- Font Awesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <!-- Vue 3 -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/vue/3.3.4/vue.global.prod.min.js"></script>
+
+    <style>
+        /* Design System & Reset */
+        :root {
+            --bg-darker: #070a13;
+            --bg-dark: #0f172a;
+            --bg-card: rgba(30, 41, 59, 0.45);
+            --bg-card-hover: rgba(30, 41, 59, 0.65);
+            --border-glow: rgba(20, 184, 166, 0.2);
+            --border-thin: rgba(255, 255, 255, 0.08);
+            
+            /* Color Tokens (Slate & Teal & Glacier) */
+            --teal: #14b8a6;
+            --teal-glow: rgba(20, 184, 166, 0.4);
+            --glacier: #06b6d4;
+            --glacier-glow: rgba(6, 182, 212, 0.4);
+            --aurora-green: #10b981;
+            
+            --text-main: #f1f5f9;
+            --text-muted: #94a3b8;
+            
+            /* Highlighting colors for terminal */
+            --log-info: #2dd4bf;
+            --log-debug: #38bdf8;
+            --log-warning: #fbbf24;
+            --log-error: #f87171;
+            --log-success: #34d399;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Outfit', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            scrollbar-width: thin;
+            scrollbar-color: rgba(20, 184, 166, 0.3) rgba(0, 0, 0, 0.2);
+        }
+
+        body {
+            background-color: var(--bg-darker);
+            color: var(--text-main);
+            min-height: 100vh;
+            overflow-x: hidden;
+            position: relative;
+        }
+
+        /* Drifting Aurora Background Effect */
+        .aurora-bg {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            z-index: -1;
+            background: radial-gradient(circle at 15% 15%, #0d1e33 0%, transparent 60%),
+                        radial-gradient(circle at 85% 85%, #0a2628 0%, transparent 60%);
+            overflow: hidden;
+        }
+
+        .aurora-light-1, .aurora-light-2 {
+            position: absolute;
+            border-radius: 50%;
+            filter: blur(140px);
+            opacity: 0.15;
+            mix-blend-mode: screen;
+            animation: drift 25s infinite alternate ease-in-out;
+        }
+
+        .aurora-light-1 {
+            width: 600px;
+            height: 400px;
+            background: radial-gradient(circle, var(--teal) 0%, transparent 80%);
+            top: -100px;
+            left: 20%;
+        }
+
+        .aurora-light-2 {
+            width: 500px;
+            height: 500px;
+            background: radial-gradient(circle, var(--glacier) 0%, transparent 80%);
+            bottom: -150px;
+            right: 15%;
+            animation-duration: 35s;
+            animation-delay: -5s;
+        }
+
+        @keyframes drift {
+            0% { transform: translate(0, 0) scale(1) rotate(0deg); }
+            50% { transform: translate(80px, 50px) scale(1.15) rotate(15deg); }
+            100% { transform: translate(-40px, -60px) scale(0.9) rotate(-10deg); }
+        }
+
+        /* Layout */
+        .app-container {
+            max-width: 1300px;
+            margin: 0 auto;
+            padding: 40px 24px;
+            display: flex;
+            flex-direction: column;
+            gap: 32px;
+        }
+
+        /* Premium Header */
+        header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding-bottom: 20px;
+            border-bottom: 1px solid var(--border-thin);
+        }
+
+        .logo-area {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+        }
+
+        .logo-icon {
+            font-size: 2.2rem;
+            background: linear-gradient(135deg, var(--teal), var(--glacier));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            filter: drop-shadow(0 2px 10px rgba(20, 184, 166, 0.4));
+            animation: pulse-icon 3s infinite ease-in-out;
+        }
+
+        .logo-title h1 {
+            font-size: 1.6rem;
+            font-weight: 700;
+            letter-spacing: 1px;
+            background: linear-gradient(to right, #ffffff, #94a3b8);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .logo-title p {
+            font-size: 0.8rem;
+            color: var(--teal);
+            font-weight: 500;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            margin-top: 2px;
+        }
+
+        @keyframes pulse-icon {
+            0%, 100% { transform: scale(1); filter: drop-shadow(0 2px 10px rgba(20, 184, 166, 0.4)); }
+            50% { transform: scale(1.08); filter: drop-shadow(0 2px 18px rgba(6, 182, 212, 0.6)); }
+        }
+
+        /* Stepper Navigation */
+        .stepper {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 20px;
+            margin-bottom: 8px;
+        }
+
+        .step-tab {
+            background: var(--bg-card);
+            border: 1px solid var(--border-thin);
+            backdrop-filter: blur(20px);
+            border-radius: 16px;
+            padding: 16px 20px;
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            cursor: pointer;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .step-tab::after {
+            content: '';
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            height: 3px;
+            background: transparent;
+            transition: all 0.3s ease;
+        }
+
+        .step-tab:hover {
+            border-color: rgba(20, 184, 166, 0.3);
+            background: var(--bg-card-hover);
+            transform: translateY(-2px);
+        }
+
+        .step-tab.active {
+            border-color: var(--teal);
+            background: rgba(30, 41, 59, 0.7);
+            box-shadow: 0 10px 25px -10px rgba(20, 184, 166, 0.15);
+        }
+
+        .step-tab.active::after {
+            background: linear-gradient(to right, var(--teal), var(--glacier));
+        }
+
+        .step-num {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.05);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.95rem;
+            font-weight: 700;
+            color: var(--text-muted);
+            border: 1px solid var(--border-thin);
+            transition: all 0.3s ease;
+        }
+
+        .step-tab.active .step-num {
+            background: linear-gradient(135deg, var(--teal), var(--glacier));
+            color: #ffffff;
+            border-color: transparent;
+            box-shadow: 0 0 10px var(--teal-glow);
+        }
+
+        .step-info {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .step-title {
+            font-size: 0.95rem;
+            font-weight: 600;
+            color: var(--text-main);
+        }
+
+        .step-desc {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            margin-top: 1px;
+        }
+
+        /* Glassmorphic Panel Layout */
+        .panel-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border-thin);
+            backdrop-filter: blur(20px);
+            border-radius: 24px;
+            padding: 32px;
+            box-shadow: 0 20px 40px -15px rgba(0, 0, 0, 0.3);
+            position: relative;
+            min-height: 480px;
+            transition: all 0.3s ease;
+        }
+
+        /* Form Controls */
+        .form-group {
+            margin-bottom: 22px;
+        }
+
+        .form-group label {
+            display: block;
+            font-size: 0.9rem;
+            font-weight: 500;
+            color: var(--text-main);
+            margin-bottom: 8px;
+        }
+
+        .form-group label i {
+            margin-right: 6px;
+            color: var(--teal);
+        }
+
+        .input-wrapper {
+            position: relative;
+        }
+
+        .input-wrapper i {
+            position: absolute;
+            left: 14px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: var(--text-muted);
+            font-size: 1rem;
+            transition: color 0.3s ease;
+        }
+
+        .form-control {
+            width: 100%;
+            background: rgba(15, 23, 42, 0.6);
+            border: 1px solid var(--border-thin);
+            border-radius: 12px;
+            padding: 12px 14px 12px 42px;
+            color: #ffffff;
+            font-size: 0.95rem;
+            transition: all 0.3s ease;
+            outline: none;
+        }
+
+        .form-control:focus {
+            border-color: var(--teal);
+            box-shadow: 0 0 10px rgba(20, 184, 166, 0.15);
+            background: rgba(15, 23, 42, 0.8);
+        }
+
+        .form-control:focus + i {
+            color: var(--teal);
+        }
+
+        /* Premium Select */
+        select.form-control {
+            appearance: none;
+            cursor: pointer;
+            padding-right: 32px;
+        }
+
+        .select-chevron {
+            position: absolute;
+            right: 14px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: var(--text-muted);
+            pointer-events: none;
+        }
+
+        /* Custom Switch */
+        .switch-container {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            background: rgba(15, 23, 42, 0.4);
+            border: 1px solid var(--border-thin);
+            padding: 14px 18px;
+            border-radius: 14px;
+            margin-bottom: 15px;
+        }
+
+        .switch-info {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+        }
+
+        .switch-title {
+            font-size: 0.95rem;
+            font-weight: 500;
+        }
+
+        .switch-desc {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+        }
+
+        .switch {
+            position: relative;
+            display: inline-block;
+            width: 50px;
+            height: 26px;
+        }
+
+        .switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+
+        .slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: rgba(255, 255, 255, 0.1);
+            border: 1px solid var(--border-thin);
+            transition: .4s;
+            border-radius: 34px;
+        }
+
+        .slider:before {
+            position: absolute;
+            content: "";
+            height: 18px;
+            width: 18px;
+            left: 3px;
+            bottom: 3px;
+            background-color: white;
+            transition: .4s;
+            border-radius: 50%;
+        }
+
+        input:checked + .slider {
+            background-color: var(--teal);
+            box-shadow: 0 0 10px var(--teal-glow);
+        }
+
+        input:checked + .slider:before {
+            transform: translateX(24px);
+        }
+
+        /* Config Tabs */
+        .config-tabs {
+            display: flex;
+            gap: 12px;
+            border-bottom: 1px solid var(--border-thin);
+            margin-bottom: 24px;
+            padding-bottom: 12px;
+        }
+
+        .config-tab-btn {
+            background: transparent;
+            border: none;
+            color: var(--text-muted);
+            font-size: 0.95rem;
+            font-weight: 500;
+            padding: 8px 16px;
+            cursor: pointer;
+            border-radius: 8px;
+            transition: all 0.3s ease;
+        }
+
+        .config-tab-btn:hover {
+            color: #ffffff;
+            background: rgba(255, 255, 255, 0.05);
+        }
+
+        .config-tab-btn.active {
+            color: var(--teal);
+            background: rgba(20, 184, 166, 0.1);
+            font-weight: 600;
+        }
+
+        /* Buttons styling */
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            background: linear-gradient(135deg, var(--teal), var(--glacier));
+            color: #ffffff;
+            font-weight: 600;
+            border: none;
+            border-radius: 12px;
+            padding: 14px 28px;
+            cursor: pointer;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            box-shadow: 0 4px 15px -3px var(--teal-glow);
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px -5px var(--glacier-glow);
+            filter: brightness(1.05);
+        }
+
+        .btn:active {
+            transform: translateY(0);
+        }
+
+        .btn-secondary {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid var(--border-thin);
+            color: var(--text-main);
+            box-shadow: none;
+        }
+
+        .btn-secondary:hover {
+            background: rgba(255, 255, 255, 0.1);
+            border-color: rgba(255, 255, 255, 0.2);
+            box-shadow: none;
+        }
+
+        .btn-danger {
+            background: linear-gradient(135deg, #f87171, #ef4444);
+            box-shadow: 0 4px 15px -3px rgba(239, 68, 68, 0.4);
+        }
+
+        .btn-danger:hover {
+            box-shadow: 0 10px 20px -5px rgba(239, 68, 68, 0.5);
+        }
+
+        /* Login Step Panel UI */
+        .login-grid {
+            display: grid;
+            grid-template-columns: 1.2fr 1fr;
+            gap: 40px;
+            align-items: center;
+        }
+
+        .login-illustration {
+            border-right: 1px solid var(--border-thin);
+            padding-right: 40px;
+        }
+
+        .illustration-title h3 {
+            font-size: 1.6rem;
+            margin-bottom: 12px;
+            background: linear-gradient(to right, #ffffff, #cbd5e1);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .illustration-title p {
+            color: var(--text-muted);
+            line-height: 1.6;
+            margin-bottom: 24px;
+            font-size: 0.95rem;
+        }
+
+        .bullet-point {
+            display: flex;
+            align-items: flex-start;
+            gap: 12px;
+            margin-bottom: 16px;
+        }
+
+        .bullet-icon {
+            margin-top: 3px;
+            color: var(--teal);
+            font-size: 1.1rem;
+        }
+
+        .bullet-text h4 {
+            font-size: 0.95rem;
+            font-weight: 600;
+        }
+
+        .bullet-text p {
+            font-size: 0.8rem;
+            color: var(--text-muted);
+            margin-top: 2px;
+        }
+
+        /* Logged In Status Board */
+        .logged-in-box {
+            text-align: center;
+            padding: 40px 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 20px;
+        }
+
+        .avatar-glow {
+            position: relative;
+            width: 100px;
+            height: 100px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, var(--teal), var(--glacier));
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 3rem;
+            color: #ffffff;
+            box-shadow: 0 0 30px var(--teal-glow);
+            margin-bottom: 10px;
+        }
+
+        .user-name {
+            font-size: 1.5rem;
+            font-weight: 700;
+        }
+
+        .user-uid {
+            font-size: 0.85rem;
+            color: var(--teal);
+            background: rgba(20, 184, 166, 0.1);
+            padding: 4px 12px;
+            border-radius: 20px;
+            border: 1px solid var(--border-glow);
+        }
+
+        /* Course Selector Panel */
+        .courses-actions {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 24px;
+        }
+
+        .courses-count {
+            font-size: 0.95rem;
+            color: var(--text-muted);
+        }
+
+        .courses-count span {
+            color: var(--teal);
+            font-weight: 600;
+        }
+
+        .actions-right {
+            display: flex;
+            gap: 12px;
+        }
+
+        .courses-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+            gap: 20px;
+            max-height: 480px;
+            overflow-y: auto;
+            padding-right: 10px;
+        }
+
+        .course-card {
+            background: rgba(15, 23, 42, 0.4);
+            border: 1px solid var(--border-thin);
+            border-radius: 16px;
+            padding: 20px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            min-height: 140px;
+        }
+
+        .course-card:hover {
+            border-color: rgba(6, 182, 212, 0.4);
+            background: rgba(15, 23, 42, 0.6);
+            transform: translateY(-2px);
+        }
+
+        .course-card.selected {
+            border-color: var(--teal);
+            background: rgba(20, 184, 166, 0.08);
+            box-shadow: 0 8px 20px -8px var(--teal-glow);
+        }
+
+        .course-header {
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: 12px;
+        }
+
+        .course-icon {
+            font-size: 1.5rem;
+            color: var(--glacier);
+            background: rgba(6, 182, 212, 0.1);
+            width: 44px;
+            height: 44px;
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .course-card.selected .course-icon {
+            color: #ffffff;
+            background: linear-gradient(135deg, var(--teal), var(--glacier));
+        }
+
+        .course-checkbox {
+            width: 20px;
+            height: 20px;
+            border-radius: 6px;
+            border: 1.5px solid var(--text-muted);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.75rem;
+            color: transparent;
+            transition: all 0.2s ease;
+        }
+
+        .course-card.selected .course-checkbox {
+            border-color: var(--teal);
+            background-color: var(--teal);
+            color: #ffffff;
+        }
+
+        .course-title {
+            font-size: 1rem;
+            font-weight: 600;
+            color: var(--text-main);
+            margin-top: 14px;
+            line-height: 1.4;
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+            height: 2.8rem;
+        }
+
+        .course-meta {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            margin-top: 10px;
+            display: flex;
+            justify-content: space-between;
+        }
+
+        /* Monitor Console Panel */
+        .monitor-layout {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 24px;
+        }
+
+        .status-overview {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 20px;
+            margin-bottom: 8px;
+        }
+
+        .status-metric {
+            background: rgba(15, 23, 42, 0.5);
+            border: 1px solid var(--border-thin);
+            border-radius: 16px;
+            padding: 18px 22px;
+            display: flex;
+            align-items: center;
+            gap: 16px;
+        }
+
+        .metric-icon {
+            font-size: 1.6rem;
+            color: var(--teal);
+            background: rgba(20, 184, 166, 0.1);
+            width: 48px;
+            height: 48px;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .metric-details {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+            overflow: hidden;
+        }
+
+        .metric-label {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .metric-value {
+            font-size: 1.05rem;
+            font-weight: 700;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        /* Glacier Console Terminal */
+        .glacier-terminal {
+            background: #040810;
+            border: 1px solid rgba(6, 182, 212, 0.25);
+            border-radius: 16px;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            height: 380px;
+            position: relative;
+            box-shadow: inset 0 0 20px rgba(6, 182, 212, 0.05);
+        }
+
+        .terminal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+            padding-bottom: 12px;
+            margin-bottom: 12px;
+        }
+
+        .terminal-title {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.85rem;
+            color: var(--glacier);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .terminal-status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #64748b;
+        }
+
+        .terminal-status-dot.active {
+            background: var(--aurora-green);
+            box-shadow: 0 0 8px var(--aurora-green);
+            animation: pulse-dot 1.5s infinite alternate;
+        }
+
+        @keyframes pulse-dot {
+            0% { opacity: 0.6; }
+            100% { opacity: 1; }
+        }
+
+        .terminal-body {
+            flex-grow: 1;
+            overflow-y: auto;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.82rem;
+            line-height: 1.6;
+            color: #e2e8f0;
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            padding-right: 6px;
+        }
+
+        /* Log Colors */
+        .log-row {
+            white-space: pre-wrap;
+            word-break: break-all;
+            border-left: 2px solid transparent;
+            padding-left: 8px;
+        }
+
+        .log-row.info {
+            color: #e2e8f0;
+            border-color: var(--log-info);
+        }
+        
+        .log-row.info .log-level {
+            color: var(--log-info);
+            font-weight: 500;
+        }
+
+        .log-row.debug {
+            color: #94a3b8;
+            border-color: var(--log-debug);
+        }
+        
+        .log-row.debug .log-level {
+            color: var(--log-debug);
+        }
+
+        .log-row.warning {
+            color: #fef08a;
+            border-color: var(--log-warning);
+        }
+        
+        .log-row.warning .log-level {
+            color: var(--log-warning);
+            font-weight: 600;
+        }
+
+        .log-row.error {
+            color: #fecaca;
+            border-color: var(--log-error);
+        }
+        
+        .log-row.error .log-level {
+            color: var(--log-error);
+            font-weight: 700;
+        }
+
+        .log-row.success {
+            color: #a7f3d0;
+            border-color: var(--log-success);
+        }
+        
+        .log-row.success .log-level {
+            color: var(--log-success);
+            font-weight: 600;
+        }
+
+        /* Console empty state */
+        .terminal-empty {
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            color: var(--text-muted);
+            gap: 12px;
+        }
+
+        .terminal-empty i {
+            font-size: 2.2rem;
+            color: rgba(6, 182, 212, 0.2);
+        }
+
+        /* Control Footer Panel */
+        .control-footer {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-top: 24px;
+            padding-top: 24px;
+            border-top: 1px solid var(--border-thin);
+        }
+
+        /* Toast Message styling */
+        .toast {
+            position: fixed;
+            bottom: 30px;
+            right: 30px;
+            background: rgba(15, 23, 42, 0.9);
+            border: 1px solid var(--teal);
+            backdrop-filter: blur(15px);
+            padding: 14px 24px;
+            border-radius: 12px;
+            box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.5);
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            z-index: 1000;
+            transform: translateY(100px);
+            opacity: 0;
+            transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+
+        .toast.show {
+            transform: translateY(0);
+            opacity: 1;
+        }
+
+        .toast.error {
+            border-color: var(--log-error);
+        }
+
+        .toast i {
+            color: var(--teal);
+            font-size: 1.15rem;
+        }
+
+        .toast.error i {
+            color: var(--log-error);
+        }
+
+        /* Range Slider customization */
+        .range-slider {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+        }
+
+        .range-slider input[type="range"] {
+            flex-grow: 1;
+            height: 6px;
+            border-radius: 3px;
+            background: rgba(255, 255, 255, 0.1);
+            outline: none;
+            appearance: none;
+        }
+
+        .range-slider input[type="range"]::-webkit-slider-thumb {
+            appearance: none;
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            background: var(--teal);
+            cursor: pointer;
+            box-shadow: 0 0 10px var(--teal-glow);
+            transition: transform 0.1s;
+        }
+
+        .range-slider input[type="range"]::-webkit-slider-thumb:hover {
+            transform: scale(1.2);
+        }
+
+        .range-value {
+            font-family: 'JetBrains Mono', monospace;
+            background: rgba(20, 184, 166, 0.1);
+            color: var(--teal);
+            padding: 2px 8px;
+            border-radius: 6px;
+            font-size: 0.85rem;
+            min-width: 44px;
+            text-align: center;
+        }
+
+        /* Responsive */
+        @media (max-width: 992px) {
+            .login-grid {
+                grid-template-columns: 1fr;
+                gap: 30px;
+            }
+            .login-illustration {
+                border-right: none;
+                border-bottom: 1px solid var(--border-thin);
+                padding-right: 0;
+                padding-bottom: 30px;
+            }
+            .status-overview {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
+
+        @media (max-width: 768px) {
+            .stepper {
+                grid-template-columns: repeat(2, 1fr);
+                gap: 12px;
+            }
+            .status-overview {
+                grid-template-columns: 1fr;
+            }
+            .control-footer {
+                flex-direction: column;
+                gap: 16px;
+                align-items: stretch;
+            }
+            .control-footer .btn {
+                width: 100%;
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="aurora-bg">
+        <div class="aurora-light-1"></div>
+        <div class="aurora-light-2"></div>
+    </div>
+
+    <div id="app" class="app-container">
+        
+        <!-- Header -->
+        <header>
+            <div class="logo-area">
+                <i class="fa-solid fa-wand-magic-sparkles logo-icon"></i>
+                <div class="logo-title">
+                    <h1>学习通全自动刷课</h1>
+                    <p>Nordic Aurora Dashboard</p>
+                </div>
+            </div>
+            <div v-if="user.loggedIn" class="user-uid">
+                <i class="fa-regular fa-user"></i> {{ user.name }}
+            </div>
+        </header>
+
+        <!-- Stepper Navigation -->
+        <nav class="stepper">
+            <div class="step-tab" :class="{ active: currentStep === 1 }" @click="setStep(1)">
+                <div class="step-num">1</div>
+                <div class="step-info">
+                    <span class="step-title">登录管理</span>
+                    <span class="step-desc">绑定学习通账号</span>
+                </div>
+            </div>
+            <div class="step-tab" :class="{ active: currentStep === 2 }" @click="setStep(2)">
+                <div class="step-num">2</div>
+                <div class="step-info">
+                    <span class="step-title">系统参数</span>
+                    <span class="step-desc">配置题库与选项</span>
+                </div>
+            </div>
+            <div class="step-tab" :class="{ active: currentStep === 3 }" @click="setStep(3)">
+                <div class="step-num">3</div>
+                <div class="step-info">
+                    <span class="step-title">课程选择</span>
+                    <span class="step-desc">挑选学习科目</span>
+                </div>
+            </div>
+            <div class="step-tab" :class="{ active: currentStep === 4 }" @click="setStep(4)">
+                <div class="step-num">4</div>
+                <div class="step-info">
+                    <span class="step-title">运行控制</span>
+                    <span class="step-desc">实时监控刷课状态</span>
+                </div>
+            </div>
+        </nav>
+
+        <!-- Main Panel Content -->
+        <main class="panel-card">
+            
+            <!-- Step 1: Login Panel -->
+            <div v-show="currentStep === 1" class="step-content">
+                <div v-if="!user.loggedIn" class="login-grid">
+                    <div class="login-illustration">
+                        <div class="illustration-title">
+                            <h3>账号快捷登录</h3>
+                            <p>输入您的学习通手机账号与密码完成安全登录。我们将临时缓存登录凭证以便同步获取您的网络课程列表。</p>
+                        </div>
+                        <div class="bullet-point">
+                            <i class="fa-solid fa-shield-halved bullet-icon"></i>
+                            <div class="bullet-text">
+                                <h4>安全隐私保护</h4>
+                                <p>所有敏感登录信息保存在您的本地 config.ini 文件中，不经过任何第三方服务器。</p>
+                            </div>
+                        </div>
+                        <div class="bullet-point">
+                            <i class="fa-solid fa-cookie bullet-icon"></i>
+                            <div class="bullet-text">
+                                <h4>支持 Cookie 登录</h4>
+                                <p>如果账号存在异地限制或频繁提示验证码，您可以通过配置 cookies.txt 实现静默验证登录。</p>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="login-form">
+                        <div class="switch-container">
+                            <div class="switch-info">
+                                <span class="switch-title">使用 Cookies 登录</span>
+                                <span class="switch-desc">忽略账号密码，从本地 cookies.txt 获取登录态</span>
+                            </div>
+                            <label class="switch">
+                                <input type="checkbox" v-model="loginForm.useCookies">
+                                <span class="slider"></span>
+                            </label>
+                        </div>
+                        
+                        <div v-show="!loginForm.useCookies">
+                            <div class="form-group">
+                                <label for="username"><i class="fa-solid fa-phone"></i> 手机号账号</label>
+                                <div class="input-wrapper">
+                                    <input type="text" id="username" class="form-control" placeholder="请输入学习通绑定手机号" v-model="loginForm.username">
+                                    <i class="fa-regular fa-user"></i>
+                                </div>
+                            </div>
+                            
+                            <div class="form-group">
+                                <label for="password"><i class="fa-solid fa-key"></i> 登录密码</label>
+                                <div class="input-wrapper">
+                                    <input type="password" id="password" class="form-control" placeholder="请输入登录密码" v-model="loginForm.password">
+                                    <i class="fa-solid fa-lock"></i>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div style="margin-top: 30px;">
+                            <button class="btn" @click="handleLogin" :disabled="loading" style="width: 100%;">
+                                <i class="fa-solid fa-spinner fa-spin" v-if="loading"></i>
+                                <i class="fa-solid fa-arrow-right-to-bracket" v-else></i>
+                                {{ loading ? '正在校验凭证...' : '立即安全登录' }}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                
+                <div v-else class="logged-in-box">
+                    <div class="avatar-glow">
+                        <i class="fa-solid fa-user-astronaut"></i>
+                    </div>
+                    <h3 class="user-name">{{ user.name }}</h3>
+                    <span class="user-uid">UID: {{ user.uid }}</span>
+                    <p style="color: var(--text-muted); margin-top: 10px;">账号已准备就绪，系统随时可拉取当前正在进行的所有课程。</p>
+                    <div style="display: flex; gap: 12px; margin-top: 20px;">
+                        <button class="btn" @click="fetchCourses(); setStep(3)">
+                            <i class="fa-solid fa-graduation-cap"></i> 进入课程选择
+                        </button>
+                        <button class="btn btn-secondary" @click="logout">
+                            <i class="fa-solid fa-arrow-right-from-bracket"></i> 切换账号
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Step 2: Config Panel -->
+            <div v-show="currentStep === 2" class="step-content">
+                <div class="config-tabs">
+                    <button class="config-tab-btn" :class="{ active: configTab === 'common' }" @click="configTab = 'common'">
+                        <i class="fa-solid fa-sliders"></i> 通用设置
+                    </button>
+                    <button class="config-tab-btn" :class="{ active: configTab === 'tiku' }" @click="configTab = 'tiku'">
+                        <i class="fa-solid fa-brain"></i> 智能题库
+                    </button>
+                    <button class="config-tab-btn" :class="{ active: configTab === 'notification' }" @click="configTab = 'notification'">
+                        <i class="fa-solid fa-bell"></i> 外部推送
+                    </button>
+                </div>
+
+                <!-- Tab: Common -->
+                <div v-show="configTab === 'common'">
+                    <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 24px;">
+                        <div class="form-group">
+                            <label><i class="fa-solid fa-gauge-high"></i> 视频播放倍速 (最大 2.0x)</label>
+                            <div class="range-slider">
+                                <input type="range" min="1.0" max="2.0" step="0.1" v-model="config.common.speed">
+                                <span class="range-value">{{ config.common.speed }}x</span>
+                            </div>
+                            <span class="switch-desc" style="display:block; margin-top:8px;">推荐设置 1.0x - 1.5x 保持操作真实性。</span>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label><i class="fa-solid fa-layer-group"></i> 线程并发数 (同时进行的章节数)</label>
+                            <div class="range-slider">
+                                <input type="range" min="1" max="8" step="1" v-model="config.common.jobs">
+                                <span class="range-value">{{ config.common.jobs }}</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="form-group" style="margin-top: 15px;">
+                        <label for="notopen_action"><i class="fa-solid fa-circle-exclamation"></i> 遇到未开放章节时的行为</label>
+                        <div class="input-wrapper">
+                            <select id="notopen_action" class="form-control" v-model="config.common.notopen_action">
+                                <option value="retry">重试检查 (retry)</option>
+                                <option value="continue">自动跳过并学习下一章 (continue)</option>
+                            </select>
+                            <i class="fa-solid fa-chevron-down select-chevron"></i>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Tab: Tiku -->
+                <div v-show="configTab === 'tiku'" style="max-height: 400px; overflow-y: auto; padding-right: 8px;">
+                    <div class="form-group">
+                        <label for="tiku_provider"><i class="fa-solid fa-server"></i> 题库提供商选择 (支持配置多个回退，以逗号分隔)</label>
+                        <div class="input-wrapper">
+                            <input type="text" id="tiku_provider" class="form-control" placeholder="示例: TikuYanxi,TikuLike,TikuGo" v-model="config.tiku.provider">
+                            <i class="fa-solid fa-database"></i>
+                        </div>
+                        <span class="switch-desc" style="display:block; margin-top:6px;">可选：TikuYanxi (言溪题库), TikuLike (LIKE知识库), TikuGo (网课小工具), AI (自定义大模型), SiliconFlow (硅基流动)。</span>
+                    </div>
+
+                    <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 24px;">
+                        <div class="form-group">
+                            <label><i class="fa-solid fa-percentage"></i> 最低题库覆盖率要求 (提交阈值)</label>
+                            <div class="range-slider">
+                                <input type="range" min="0.5" max="1.0" step="0.05" v-model="config.tiku.cover_rate">
+                                <span class="range-value">{{ Math.round(config.tiku.cover_rate * 100) }}%</span>
+                            </div>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label><i class="fa-solid fa-clock"></i> 题目搜索间隔延迟 (秒)</label>
+                            <div class="range-slider">
+                                <input type="range" min="0.5" max="5.0" step="0.5" v-model="config.tiku.delay">
+                                <span class="range-value">{{ config.tiku.delay }}s</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="switch-container">
+                        <div class="switch-info">
+                            <span class="switch-title">自动提交测验 (submit)</span>
+                            <span class="switch-desc">关闭则仅答题保存草稿不提交；开启后，达到覆盖率则自动提交测验以解锁新章节。</span>
+                        </div>
+                        <label class="switch">
+                            <input type="checkbox" v-model="config.tiku.submit">
+                            <span class="slider"></span>
+                        </label>
+                    </div>
+
+                    <!-- AI Models Configurations -->
+                    <div style="border-top: 1px solid var(--border-thin); margin-top:20px; padding-top:20px;">
+                        <h4 style="font-size: 0.95rem; margin-bottom: 15px; color: var(--glacier);"><i class="fa-solid fa-microchip"></i> 大模型 (AI / 硅基流动) 配置项目 (非必填)</h4>
+                        
+                        <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 20px;">
+                            <div class="form-group">
+                                <label>SiliconFlow API Key (硅基流动)</label>
+                                <input type="password" class="form-control" style="padding-left:16px;" placeholder="sk-..." v-model="config.tiku.siliconflow_key">
+                            </div>
+                            <div class="form-group">
+                                <label>SiliconFlow 模型选择</label>
+                                <input type="text" class="form-control" style="padding-left:16px;" placeholder="deepseek-ai/DeepSeek-V3" v-model="config.tiku.siliconflow_model">
+                            </div>
+                        </div>
+
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+                            <div class="form-group">
+                                <label>自定义 OpenAI API 端点 (Endpoint)</label>
+                                <input type="text" class="form-control" style="padding-left:16px;" placeholder="https://api.openai.com/v1" v-model="config.tiku.endpoint">
+                            </div>
+                            <div class="form-group">
+                                <label>自定义 API 密钥 (Key)</label>
+                                <input type="password" class="form-control" style="padding-left:16px;" placeholder="API Key" v-model="config.tiku.key">
+                            </div>
+                        </div>
+
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+                            <div class="form-group">
+                                <label>自定义大模型模型名称 (Model)</label>
+                                <input type="text" class="form-control" style="padding-left:16px;" placeholder="如: deepseek-chat 或 gpt-4o" v-model="config.tiku.model">
+                            </div>
+                            <div class="form-group">
+                                <label>大模型请求最小间隔时间 (秒)</label>
+                                <input type="number" class="form-control" style="padding-left:16px;" placeholder="3" v-model="config.tiku.min_interval_seconds">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Tab: Notification -->
+                <div v-show="configTab === 'notification'">
+                    <div class="form-group">
+                        <label for="notify_provider"><i class="fa-solid fa-envelope"></i> 推送通知渠道</label>
+                        <div class="input-wrapper">
+                            <select id="notify_provider" class="form-control" v-model="config.notification.provider">
+                                <option value="ServerChan">Server酱 (ServerChan)</option>
+                                <option value="Qmsg">Qmsg酱 QQ 推送</option>
+                                <option value="Bark">Bark iOS 推送</option>
+                                <option value="Telegram">Telegram Bot 推送</option>
+                                <option value="">关闭外部通知</option>
+                            </select>
+                            <i class="fa-solid fa-chevron-down select-chevron"></i>
+                        </div>
+                    </div>
+
+                    <div class="form-group" v-if="config.notification.provider">
+                        <label for="notify_url"><i class="fa-solid fa-link"></i> 通道推送 URL API Key</label>
+                        <div class="input-wrapper">
+                            <input type="text" id="notify_url" class="form-control" placeholder="请输入通道对应的推送 Webhook 完整 URL" v-model="config.notification.url">
+                            <i class="fa-solid fa-key"></i>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="control-footer">
+                    <span style="color: var(--text-muted); font-size: 0.85rem;"><i class="fa-solid fa-circle-info"></i> 配置将实时覆盖保存至本地 `config.ini`。</span>
+                    <button class="btn" @click="saveConfig">
+                        <i class="fa-solid fa-floppy-disk"></i> 保存系统参数
+                    </button>
+                </div>
+            </div>
+
+            <!-- Step 3: Course Selection Panel -->
+            <div v-show="currentStep === 3" class="step-content">
+                <div v-if="!user.loggedIn" class="logged-in-box">
+                    <i class="fa-solid fa-lock" style="font-size: 3rem; color: rgba(255,255,255,0.1);"></i>
+                    <p style="color: var(--text-muted);">尚未完成登录。请先前往步骤一输入账号信息并登录。</p>
+                    <button class="btn" @click="setStep(1)"><i class="fa-solid fa-arrow-left"></i> 前往登录</button>
+                </div>
+                
+                <div v-else>
+                    <div class="courses-actions">
+                        <div class="courses-count">
+                            当前获取到 <span>{{ courses.length }}</span> 门正在学习的课程，已选择 <span>{{ selectedCourseIds.length }}</span> 门。
+                        </div>
+                        <div class="actions-right">
+                            <button class="btn btn-secondary btn-sm" style="padding: 8px 16px; font-size: 0.85rem;" @click="selectAllCourses">
+                                <i class="fa-regular fa-square-check"></i> 全选
+                            </button>
+                            <button class="btn btn-secondary btn-sm" style="padding: 8px 16px; font-size: 0.85rem;" @click="deselectAllCourses">
+                                <i class="fa-regular fa-square"></i> 清空
+                            </button>
+                            <button class="btn btn-secondary btn-sm" style="padding: 8px 16px; font-size: 0.85rem;" @click="fetchCourses">
+                                <i class="fa-solid fa-rotate"></i> 刷新列表
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Course grid -->
+                    <div class="courses-grid" v-if="courses.length > 0">
+                        <div class="course-card" 
+                             v-for="c in courses" 
+                             :key="c.courseId"
+                             :class="{ selected: selectedCourseIds.includes(c.courseId) }"
+                             @click="toggleCourse(c.courseId)">
+                            
+                            <div class="course-header">
+                                <div class="course-icon">
+                                    <i class="fa-solid fa-book"></i>
+                                </div>
+                                <div class="course-checkbox">
+                                    <i class="fa-solid fa-check"></i>
+                                </div>
+                            </div>
+                            
+                            <div class="course-title" :title="c.title">
+                                {{ c.title }}
+                            </div>
+                            
+                            <div class="course-meta">
+                                <span>ID: {{ c.courseId }}</span>
+                                <span>CPI: {{ c.cpi }}</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div v-else class="logged-in-box" style="height: 300px; justify-content: center;">
+                        <i class="fa-solid fa-hourglass-empty fa-spin" style="font-size: 2rem; color: var(--teal);"></i>
+                        <p style="color: var(--text-muted); margin-top: 15px;">正在同步您的课程信息，这可能需要数秒钟...</p>
+                    </div>
+
+                    <div class="control-footer" v-if="courses.length > 0">
+                        <span></span>
+                        <button class="btn" @click="confirmCourses" :disabled="selectedCourseIds.length === 0">
+                            <i class="fa-solid fa-circle-check"></i> 确认课程并前往监控
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Step 4: Live Run / Console Monitor Panel -->
+            <div v-show="currentStep === 4" class="step-content">
+                <div class="monitor-layout">
+                    
+                    <!-- Top stats row -->
+                    <div class="status-overview">
+                        <div class="status-metric">
+                            <div class="metric-icon" :style="{ color: taskStatusColor, background: taskStatusBg }">
+                                <i class="fa-solid" :class="taskStatusIcon"></i>
+                            </div>
+                            <div class="metric-details">
+                                <span class="metric-label">系统运行状态</span>
+                                <span class="metric-value" :style="{ color: taskStatusColor }">{{ taskStatusLabel }}</span>
+                            </div>
+                        </div>
+                        
+                        <div class="status-metric">
+                            <div class="metric-icon">
+                                <i class="fa-solid fa-graduation-cap"></i>
+                            </div>
+                            <div class="metric-details">
+                                <span class="metric-label">当前运行课程</span>
+                                <span class="metric-value" :title="currentCourse">{{ currentCourse }}</span>
+                            </div>
+                        </div>
+
+                        <div class="status-metric">
+                            <div class="metric-icon">
+                                <i class="fa-solid fa-bookmark"></i>
+                            </div>
+                            <div class="metric-details">
+                                <span class="metric-label">当前运行章节</span>
+                                <span class="metric-value" :title="currentChapter">{{ currentChapter }}</span>
+                            </div>
+                        </div>
+
+                        <div class="status-metric">
+                            <div class="metric-icon">
+                                <i class="fa-regular fa-clock"></i>
+                            </div>
+                            <div class="metric-details">
+                                <span class="metric-label">已监控时长</span>
+                                <span class="metric-value">{{ runTimeString }}</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Glacier Terminal Console -->
+                    <div class="glacier-terminal">
+                        <div class="terminal-header">
+                            <div class="terminal-title">
+                                <div class="terminal-status-dot" :class="{ active: isTaskRunning }"></div>
+                                <span>GLACIER TERMINAL &gt;_ GL-CONSOLE</span>
+                            </div>
+                            <div style="display:flex; gap:10px;">
+                                <button class="btn btn-secondary" style="padding: 4px 10px; font-size: 0.75rem; border-radius: 6px;" @click="clearConsoleLogs">
+                                    <i class="fa-solid fa-trash-can"></i> 清屏
+                                </button>
+                                <button class="btn btn-secondary" style="padding: 4px 10px; font-size: 0.75rem; border-radius: 6px;" @click="copyConsoleLogs">
+                                    <i class="fa-regular fa-copy"></i> 复制
+                                </button>
+                            </div>
+                        </div>
+                        
+                        <div class="terminal-body" ref="terminalBody">
+                            <div v-if="consoleLogs.length === 0" class="terminal-empty">
+                                <i class="fa-solid fa-terminal"></i>
+                                <span>控制台空闲中，点击“开始刷课”后将实时监控输出日志。</span>
+                            </div>
+                            <div v-else 
+                                 v-for="(log, idx) in consoleLogs" 
+                                 :key="idx" 
+                                 class="log-row" 
+                                 :class="getLogClass(log)">
+                                <span class="log-time">{{ getLogTime(log) }}</span>
+                                <span class="log-level">[{{ getLogLevel(log) }}]</span>
+                                <span class="log-text">{{ getLogText(log) }}</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Footer Controllers -->
+                    <div class="control-footer" style="margin-top: 10px; padding-top: 15px; border:none;">
+                        <span style="color: var(--text-muted); font-size: 0.85rem;"><i class="fa-solid fa-circle-exclamation"></i> 退出或关闭网页不会中断后台任务，系统仍将在后台全自动执行。</span>
+                        <div style="display: flex; gap: 12px;">
+                            <button v-if="!isTaskRunning" 
+                                    class="btn" 
+                                    @click="startTask" 
+                                    :disabled="selectedCourseIds.length === 0">
+                                <i class="fa-solid fa-play"></i> 一键开启自动刷课
+                            </button>
+                            <button v-else 
+                                    class="btn btn-danger" 
+                                    @click="stopTask">
+                                <i class="fa-solid fa-circle-stop"></i> 停止刷课任务
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+        </main>
+
+        <!-- Toast Notifications -->
+        <div class="toast" :class="{ show: toast.visible, error: toast.isError }">
+            <i class="fa-solid" :class="toast.isError ? 'fa-circle-xmark' : 'fa-circle-check'"></i>
+            <span>{{ toast.message }}</span>
+        </div>
+
+    </div>
+
+    <script>
+        const { createApp, ref, computed, onMounted, onUnmounted, nextTick } = Vue;
+
+        createApp({
+            setup() {
+                // Step Control
+                const currentStep = ref(1);
+                const configTab = ref('common');
+                const loading = ref(false);
+                
+                // User & Login Form
+                const user = ref({
+                    loggedIn: false,
+                    name: '',
+                    uid: ''
+                });
+                
+                const loginForm = ref({
+                    username: '',
+                    password: '',
+                    useCookies: false
+                });
+
+                // Configuration Object (matching config.ini)
+                const config = ref({
+                    common: {
+                        use_cookies: false,
+                        username: '',
+                        password: '',
+                        course_list: '',
+                        speed: 1.0,
+                        jobs: 4,
+                        notopen_action: 'retry'
+                    },
+                    tiku: {
+                        provider: 'TikuYanxi',
+                        submit: false,
+                        cover_rate: 0.9,
+                        delay: 1.0,
+                        tokens: '',
+                        endpoint: '',
+                        key: '',
+                        model: '',
+                        min_interval_seconds: 3,
+                        siliconflow_key: '',
+                        siliconflow_model: 'deepseek-ai/DeepSeek-R1'
+                    },
+                    notification: {
+                        provider: 'ServerChan',
+                        url: ''
+                    }
+                });
+
+                // Courses List
+                const courses = ref([]);
+                const selectedCourseIds = ref([]);
+
+                // Terminal, Monitor & Time Tracking
+                const isTaskRunning = ref(false);
+                const taskState = ref('idle'); // idle, running, completed, error
+                const currentCourse = ref('-');
+                const currentChapter = ref('-');
+                const consoleLogs = ref([]);
+                const errorMsg = ref('');
+                
+                const runSeconds = ref(0);
+                let timerInterval = null;
+                let statusInterval = null;
+                let logNextIndex = 0;
+
+                // Toast Notification
+                const toast = ref({
+                    visible: false,
+                    message: '',
+                    isError: false
+                });
+
+                const showToast = (msg, isErr = false) => {
+                    toast.value.message = msg;
+                    toast.value.isError = isErr;
+                    toast.value.visible = true;
+                    setTimeout(() => {
+                        toast.value.visible = false;
+                    }, 4000);
+                };
+
+                // Methods
+                const setStep = (step) => {
+                    if (step === 3 && !user.value.loggedIn) {
+                        showToast('请先完成登录流程', true);
+                        return;
+                    }
+                    if (step === 4 && !user.value.loggedIn) {
+                        showToast('请先完成登录流程', true);
+                        return;
+                    }
+                    currentStep.value = step;
+                    
+                    if (step === 4) {
+                        // Scroll terminal to bottom
+                        nextTick(scrollToBottom);
+                    }
+                };
+
+                // Read config from backend
+                const loadConfig = async () => {
+                    try {
+                        const res = await fetch('/api/config');
+                        const data = await res.json();
+                        if (data.status === 'success') {
+                            // Populate our local config refs
+                            const cfg = data.config;
+                            
+                            // Merge keys carefully
+                            if (cfg.common) {
+                                config.value.common.username = cfg.common.username || '';
+                                config.value.common.password = cfg.common.password || '';
+                                config.value.common.speed = parseFloat(cfg.common.speed || 1.0);
+                                config.value.common.jobs = parseInt(cfg.common.jobs || 4);
+                                config.value.common.notopen_action = cfg.common.notopen_action || 'retry';
+                                config.value.common.use_cookies = (cfg.common.use_cookies === 'true');
+                                
+                                // Sync initial loginForm
+                                loginForm.value.username = config.value.common.username;
+                                loginForm.value.password = config.value.common.password;
+                                loginForm.value.useCookies = config.value.common.use_cookies;
+                            }
+                            
+                            if (cfg.tiku) {
+                                config.value.tiku.provider = cfg.tiku.provider || 'TikuYanxi';
+                                config.value.tiku.submit = (cfg.tiku.submit === 'true');
+                                config.value.tiku.cover_rate = parseFloat(cfg.tiku.cover_rate || 0.9);
+                                config.value.tiku.delay = parseFloat(cfg.tiku.delay || 1.0);
+                                config.value.tiku.tokens = cfg.tiku.tokens || '';
+                                config.value.tiku.endpoint = cfg.tiku.endpoint || '';
+                                config.value.tiku.key = cfg.tiku.key || '';
+                                config.value.tiku.model = cfg.tiku.model || '';
+                                config.value.tiku.min_interval_seconds = parseInt(cfg.tiku.min_interval_seconds || 3);
+                                config.value.tiku.siliconflow_key = cfg.tiku.siliconflow_key || '';
+                                config.value.tiku.siliconflow_model = cfg.tiku.siliconflow_model || 'deepseek-ai/DeepSeek-R1';
+                            }
+                            
+                            if (cfg.notification) {
+                                config.value.notification.provider = cfg.notification.provider || '';
+                                config.value.notification.url = cfg.notification.url || '';
+                            }
+                            
+                            // Initialize course selection list if saved
+                            if (cfg.common && cfg.common.course_list) {
+                                selectedCourseIds.value = cfg.common.course_list.split(',').map(c => c.trim()).filter(Boolean);
+                            }
+                        }
+                    } catch (err) {
+                        showToast('加载本地参数文件失败: ' + err.message, true);
+                    }
+                };
+
+                // Save config to backend
+                const saveConfig = async () => {
+                    try {
+                        const payload = {
+                            config: {
+                                common: {
+                                    use_cookies: config.value.common.use_cookies ? 'true' : 'false',
+                                    username: config.value.common.username,
+                                    password: config.value.common.password,
+                                    speed: config.value.common.speed,
+                                    jobs: config.value.common.jobs,
+                                    notopen_action: config.value.common.notopen_action,
+                                    course_list: selectedCourseIds.value.join(',')
+                                },
+                                tiku: {
+                                    provider: config.value.tiku.provider,
+                                    submit: config.value.tiku.submit ? 'true' : 'false',
+                                    cover_rate: config.value.tiku.cover_rate,
+                                    delay: config.value.tiku.delay,
+                                    tokens: config.value.tiku.tokens,
+                                    endpoint: config.value.tiku.endpoint,
+                                    key: config.value.tiku.key,
+                                    model: config.value.tiku.model,
+                                    min_interval_seconds: config.value.tiku.min_interval_seconds,
+                                    siliconflow_key: config.value.tiku.siliconflow_key,
+                                    siliconflow_model: config.value.tiku.siliconflow_model
+                                },
+                                notification: {
+                                    provider: config.value.notification.provider,
+                                    url: config.value.notification.url
+                                }
+                            }
+                        };
+                        
+                        const res = await fetch('/api/config', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify(payload)
+                        });
+                        
+                        const data = await res.json();
+                        if (data.status === 'success') {
+                            showToast('系统参数已成功保存并同步！');
+                        } else {
+                            showToast(data.message, true);
+                        }
+                    } catch (err) {
+                        showToast('保存配置文件失败: ' + err.message, true);
+                    }
+                };
+
+                // Login Method
+                const handleLogin = async () => {
+                    loading.value = true;
+                    try {
+                        const res = await fetch('/api/login', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                username: loginForm.value.username,
+                                password: loginForm.value.password,
+                                use_cookies: loginForm.value.useCookies
+                            })
+                        });
+                        const data = await res.json();
+                        if (data.status === 'success') {
+                            user.value.loggedIn = true;
+                            user.value.name = data.user_info.name;
+                            user.value.uid = data.user_info.uid;
+                            
+                            // Update core config credentials in config ref
+                            config.value.common.username = loginForm.value.username;
+                            config.value.common.password = loginForm.value.password;
+                            config.value.common.use_cookies = loginForm.value.useCookies;
+                            
+                            showToast('登录验证成功！已读取学习通云端账号。');
+                            
+                            // Automatically fetch courses and direct to step 3
+                            await fetchCourses();
+                            setTimeout(() => {
+                                setStep(3);
+                            }, 500);
+                        } else {
+                            showToast('登录验证失败: ' + data.message, true);
+                        }
+                    } catch (err) {
+                        showToast('请求登录接口故障: ' + err.message, true);
+                    } finally {
+                        loading.value = false;
+                    }
+                };
+
+                const logout = () => {
+                    user.value.loggedIn = false;
+                    user.value.name = '';
+                    user.value.uid = '';
+                    courses.value = [];
+                    showToast('账号已安全注销。');
+                    setStep(1);
+                };
+
+                // Fetch courses
+                const fetchCourses = async () => {
+                    try {
+                        const res = await fetch('/api/courses');
+                        const data = await res.json();
+                        if (data.status === 'success') {
+                            courses.value = data.courses || [];
+                        } else {
+                            showToast('获取课程列表失败: ' + data.message, true);
+                        }
+                    } catch (err) {
+                        showToast('请求同步课程故障: ' + err.message, true);
+                    }
+                };
+
+                // Toggle course selection
+                const toggleCourse = (id) => {
+                    const idx = selectedCourseIds.value.indexOf(id);
+                    if (idx > -1) {
+                        selectedCourseIds.value.splice(idx, 1);
+                    } else {
+                        selectedCourseIds.value.push(id);
+                    }
+                };
+
+                const selectAllCourses = () => {
+                    selectedCourseIds.value = courses.value.map(c => c.courseId);
+                };
+
+                const deselectAllCourses = () => {
+                    selectedCourseIds.value = [];
+                };
+
+                const confirmCourses = () => {
+                    if (selectedCourseIds.value.length === 0) {
+                        showToast('请至少选择一门学习课程', true);
+                        return;
+                    }
+                    
+                    // Save course lists to config file in backend
+                    saveConfig();
+                    
+                    showToast('已确认学习课程！');
+                    setStep(4);
+                };
+
+                // Terminal utilities
+                const refTerminalBody = ref(null);
+                
+                const scrollToBottom = () => {
+                    const el = refTerminalBody.value;
+                    if (el) {
+                        el.scrollTop = el.scrollHeight;
+                    }
+                };
+
+                const getLogClass = (log) => {
+                    const l = log.toLowerCase();
+                    if (l.includes('warning') || l.includes('warn')) return 'warning';
+                    if (l.includes('error') || l.includes('exception') || l.includes('fail')) return 'error';
+                    if (l.includes('trace') || l.includes('debug')) return 'debug';
+                    if (l.includes('完成') || l.includes('success')) return 'success';
+                    return 'info';
+                };
+
+                const getLogTime = (log) => {
+                    // Extract time "2026-05-23 20:30:15"
+                    const match = log.match(/^(\d{4}-\d{2}-\d{2}\s\d{2}:\d{2}:\d{2})/);
+                    return match ? match[1].split(' ')[1] : '';
+                };
+
+                const getLogLevel = (log) => {
+                    const match = log.match(/\|\s*([A-Z]{4,8})\s*\|/);
+                    return match ? match[1] : 'INFO';
+                };
+
+                const getLogText = (log) => {
+                    const parts = log.split('|');
+                    if (parts.length >= 3) {
+                        return parts.slice(2).join('|').trim();
+                    }
+                    return log;
+                };
+
+                const clearConsoleLogs = () => {
+                    consoleLogs.value = [];
+                };
+
+                const copyConsoleLogs = () => {
+                    if (consoleLogs.value.length === 0) return;
+                    const text = consoleLogs.value.join('\n');
+                    navigator.clipboard.writeText(text)
+                        .then(() => showToast('控制台日志已复制到剪贴板！'))
+                        .catch(() => showToast('复制失败', true));
+                };
+
+                // Brushing Task Controls
+                const startTask = async () => {
+                    if (selectedCourseIds.value.length === 0) {
+                        showToast('未选择任何课程，请先前往步骤三选择课程', true);
+                        return;
+                    }
+                    
+                    try {
+                        // Automatically save current config state to backend before starting to ensure latest parameters are applied
+                        await saveConfig();
+                        
+                        const res = await fetch('/api/start', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                course_ids: selectedCourseIds.value
+                            })
+                        });
+                        
+                        const data = await res.json();
+                        if (data.status === 'success') {
+                            showToast('自动刷课后台引擎已成功启动！');
+                            isTaskRunning.value = true;
+                            taskState.value = 'running';
+                            runSeconds.value = 0;
+                            logNextIndex = 0;
+                            consoleLogs.value = [];
+                            
+                            startTimers();
+                        } else {
+                            showToast(data.message, true);
+                        }
+                    } catch (err) {
+                        showToast('启动任务时异常: ' + err.message, true);
+                    }
+                };
+
+                const stopTask = async () => {
+                    try {
+                        const res = await fetch('/api/stop', { method: 'POST' });
+                        const data = await res.json();
+                        if (data.status === 'success') {
+                            showToast('正在向核心发送安全停止指令，请稍候...');
+                        } else {
+                            showToast(data.message, true);
+                        }
+                    } catch (err) {
+                        showToast('发送终止请求异常: ' + err.message, true);
+                    }
+                };
+
+                // Timers & State Poller
+                const startTimers = () => {
+                    stopTimers();
+                    
+                    // Brushing duration timer
+                    timerInterval = setInterval(() => {
+                        if (isTaskRunning.value) {
+                            runSeconds.value++;
+                        }
+                    }, 1000);
+                    
+                    // State & Log incremental poller
+                    statusInterval = setInterval(pollStatus, 1000);
+                };
+
+                const stopTimers = () => {
+                    if (timerInterval) clearInterval(timerInterval);
+                    if (statusInterval) clearInterval(statusInterval);
+                };
+
+                const pollStatus = async () => {
+                    try {
+                        const res = await fetch(`/api/status?last_index=${logNextIndex}`);
+                        const data = await res.json();
+                        if (data.status === 'success') {
+                            taskState.value = data.task_status;
+                            isTaskRunning.value = (data.task_status === 'running');
+                            
+                            currentCourse.value = data.current_course;
+                            currentChapter.value = data.current_chapter;
+                            errorMsg.value = data.error_message;
+                            
+                            if (data.logs && data.logs.length > 0) {
+                                consoleLogs.value = [...consoleLogs.value, ...data.logs];
+                                logNextIndex = data.next_index;
+                                
+                                // Auto-scroll
+                                nextTick(scrollToBottom);
+                            }
+                            
+                            if (taskState.value === 'completed') {
+                                showToast('🎉 所有选定课程刷课任务已全部圆满完成！');
+                                stopTimers();
+                            } else if (taskState.value === 'error') {
+                                showToast('⚠️ 刷课任务遇到严重异常终止', true);
+                                stopTimers();
+                            } else if (taskState.value === 'idle' && !isTaskRunning.value) {
+                                stopTimers();
+                            }
+                        }
+                    } catch (err) {
+                        console.error('轮询状态异常: ', err);
+                    }
+                };
+
+                // Time formatter
+                const runTimeString = computed(() => {
+                    const secs = runSeconds.value;
+                    const h = Math.floor(secs / 3600);
+                    const m = Math.floor((secs % 3600) / 60);
+                    const s = secs % 60;
+                    
+                    const format = (num) => String(num).padStart(2, '0');
+                    return `${format(h)}:${format(m)}:${format(s)}`;
+                });
+
+                // Status Overview computed states
+                const taskStatusLabel = computed(() => {
+                    switch (taskState.value) {
+                        case 'running': return '主引擎运行中...';
+                        case 'completed': return '全部任务已完成';
+                        case 'error': return '遇到故障中断';
+                        default: return '空闲 (等待指令)';
+                    }
+                });
+
+                const taskStatusColor = computed(() => {
+                    switch (taskState.value) {
+                        case 'running': return 'var(--teal)';
+                        case 'completed': return 'var(--aurora-green)';
+                        case 'error': return 'var(--log-error)';
+                        default: return 'var(--text-muted)';
+                    }
+                });
+
+                const taskStatusBg = computed(() => {
+                    switch (taskState.value) {
+                        case 'running': return 'rgba(20, 184, 166, 0.1)';
+                        case 'completed': return 'rgba(16, 185, 129, 0.1)';
+                        case 'error': return 'rgba(239, 68, 68, 0.1)';
+                        default: return 'rgba(255, 255, 255, 0.05)';
+                    }
+                });
+
+                const taskStatusIcon = computed(() => {
+                    switch (taskState.value) {
+                        case 'running': return 'fa-spinner fa-spin';
+                        case 'completed': return 'fa-circle-check';
+                        case 'error': return 'fa-circle-exclamation';
+                        default: return 'fa-circle-play';
+                    }
+                });
+
+                onMounted(async () => {
+                    // Load config on mount
+                    await loadConfig();
+                    
+                    // Check if already logged in via cached credentials
+                    if (config.value.common.username || config.value.common.use_cookies) {
+                        // Attempt automatic check-in / login cache
+                        loginForm.value.username = config.value.common.username;
+                        loginForm.value.password = config.value.common.password;
+                        loginForm.value.useCookies = config.value.common.use_cookies;
+                    }
+                    
+                    // Poll status initially to recover UI state if server is already running
+                    await pollStatus();
+                    if (isTaskRunning.value) {
+                        startTimers();
+                        setStep(4);
+                    }
+                });
+
+                onUnmounted(() => {
+                    stopTimers();
+                });
+
+                return {
+                    currentStep,
+                    configTab,
+                    loading,
+                    user,
+                    loginForm,
+                    config,
+                    courses,
+                    selectedCourseIds,
+                    isTaskRunning,
+                    taskState,
+                    currentCourse,
+                    currentChapter,
+                    consoleLogs,
+                    errorMsg,
+                    toast,
+                    refTerminalBody,
+                    runTimeString,
+                    taskStatusLabel,
+                    taskStatusColor,
+                    taskStatusBg,
+                    taskStatusIcon,
+                    
+                    setStep,
+                    handleLogin,
+                    logout,
+                    saveConfig,
+                    fetchCourses,
+                    toggleCourse,
+                    selectAllCourses,
+                    deselectAllCourses,
+                    confirmCourses,
+                    clearConsoleLogs,
+                    copyConsoleLogs,
+                    startTask,
+                    stopTask,
+                    getLogClass,
+                    getLogTime,
+                    getLogLevel,
+                    getLogText
+                };
+            }
+        }).mount('#app');
+    </script>
+</body>
+</html>
