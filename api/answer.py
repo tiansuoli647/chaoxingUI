@@ -133,6 +133,73 @@ class CacheDAO:
             data[question] = answer
             self._write_cache(data)
 
+def get_image_size(data: bytes) -> tuple[Optional[int], Optional[int]]:
+    """
+    通过解析图片二进制数据获取图片的宽高 (支持 PNG, JPEG, GIF, BMP)
+    """
+    try:
+        from PIL import Image
+        import io
+        img = Image.open(io.BytesIO(data))
+        return img.width, img.height
+    except ImportError:
+        pass
+    except Exception:
+        pass
+
+    # Fallback to pure Python parsing
+    try:
+        # PNG
+        if data.startswith(b'\x89PNG\r\n\x1a\n'):
+            width = int.from_bytes(data[16:20], byteorder='big')
+            height = int.from_bytes(data[20:24], byteorder='big')
+            return width, height
+
+        # GIF
+        if data.startswith(b'GIF87a') or data.startswith(b'GIF89a'):
+            width = int.from_bytes(data[6:8], byteorder='little')
+            height = int.from_bytes(data[8:10], byteorder='little')
+            return width, height
+
+        # JPEG
+        if data.startswith(b'\xff\xd8'):
+            idx = 2
+            while idx < len(data):
+                while idx < len(data) and data[idx] != 0xff:
+                    idx += 1
+                if idx >= len(data):
+                    break
+                while idx < len(data) and data[idx] == 0xff:
+                    idx += 1
+                if idx >= len(data):
+                    break
+                marker = data[idx]
+                idx += 1
+                if marker == 0xd9: # EOI
+                    break
+                if marker == 0xda: # SOS
+                    break
+                if idx + 2 > len(data):
+                    break
+                length = int.from_bytes(data[idx:idx+2], byteorder='big')
+                if marker in [0xc0, 0xc1, 0xc2, 0xc3, 0xc5, 0xc6, 0xc7, 0xc9, 0xca, 0xcb, 0xcd, 0xce, 0xcf]:
+                    if idx + 2 + 5 <= len(data):
+                        height = int.from_bytes(data[idx+3:idx+5], byteorder='big')
+                        width = int.from_bytes(data[idx+5:idx+7], byteorder='big')
+                        return width, height
+                idx += length
+
+        # BMP
+        if data.startswith(b'BM'):
+            if len(data) >= 26:
+                width = int.from_bytes(data[18:22], byteorder='little')
+                height = abs(int.from_bytes(data[22:26], byteorder='little', signed=True))
+                return width, height
+    except Exception:
+        pass
+
+    return None, None
+
 
 # TODO: 重构此部分代码，将此类改为抽象类，加载题库方法改为静态方法，禁止直接初始化此类
 class Tiku:
@@ -333,6 +400,96 @@ class Tiku:
         默认返回 True（非大模型题库不需要检查）
         """
         return True
+
+    def extract_images_from_question(self, q_info: dict) -> list:
+        urls = []
+        if 'title' in q_info and isinstance(q_info['title'], str):
+            urls.extend(re.findall(r'<img[^>]+src=["\']([^"\']+)["\']', q_info['title']))
+        if 'options' in q_info and isinstance(q_info['options'], str):
+            urls.extend(re.findall(r'<img[^>]+src=["\']([^"\']+)["\']', q_info['options']))
+        
+        # 去重并保持顺序
+        seen = set()
+        unique_urls = []
+        for url in urls:
+            if url not in seen:
+                seen.add(url)
+                unique_urls.append(url)
+        return unique_urls
+
+    def download_image_as_base64(self, url: str) -> Optional[dict]:
+        import base64
+        from api.base import SessionManager
+        
+        # 补全协议和域名
+        if url.startswith("//"):
+            url = "https:" + url
+        elif not url.startswith("http://") and not url.startswith("https://"):
+            url = "https://mooc1.chaoxing.com" + url if url.startswith("/") else "https://mooc1.chaoxing.com/" + url
+            
+        session = SessionManager.get_session()
+        try:
+            logger.info(f"正在下载题目中的图片: {url}")
+            resp = session.get(url, timeout=10)
+            if resp.status_code == 200:
+                # 检查图片尺寸，过滤掉尺寸过小的图片以防大模型请求报错 (限制宽高必须大于10)
+                width, height = get_image_size(resp.content)
+                if width is not None and height is not None:
+                    if width <= 10 or height <= 10:
+                        logger.warning(f"图片尺寸过小 ({width}x{height})，已自动忽略以防大模型接口报错: {url}")
+                        return None
+
+                content_type = resp.headers.get("Content-Type", "image/png")
+                if not content_type.startswith("image/"):
+                    content_type = "image/png"
+                base64_data = base64.b64encode(resp.content).decode("utf-8")
+                return {
+                    "mime": content_type,
+                    "base64": base64_data
+                }
+            else:
+                logger.error(f"下载图片失败: status_code={resp.status_code}")
+        except Exception as e:
+            logger.error(f"下载图片出现异常: {e}")
+        return None
+
+    def process_question_images(self, q_info: dict) -> tuple[str, str, list[dict]]:
+        """
+        按出现顺序处理题目和选项中的图片：
+        1. 按顺序提取所有图片并下载过滤
+        2. 有效图片在文本中按顺序替换为 [图片1], [图片2] 等
+        3. 无效（尺寸过小等）图片在文本中过滤为空字符串
+        返回: (cleaned_title, cleaned_options, valid_imgs)
+        """
+        title = q_info.get('title', '') or ''
+        options = q_info.get('options', '') or ''
+        
+        valid_imgs = []
+        
+        def replace_callback(match):
+            img_tag = match.group(0)
+            src_match = re.search(r'src=["\']([^"\']+)["\']', img_tag)
+            if not src_match:
+                return ""
+            url = src_match.group(1)
+            
+            img_data = self.download_image_as_base64(url)
+            if img_data:
+                valid_imgs.append(img_data)
+                return f"[图片{len(valid_imgs)}]"
+            else:
+                return ""
+                
+        cleaned_title = re.sub(r'<img[^>]+>', replace_callback, title)
+        cleaned_options_raw = re.sub(r'<img[^>]+>', replace_callback, options)
+        
+        # 去除选项字母，防止大模型直接输出字母而非内容
+        options_list = cleaned_options_raw.split('\n')
+        cleaned_options = [re.sub(r"^[A-Z]\s*", "", option) for option in options_list]
+        options_str = "\n".join(cleaned_options)
+        
+        return cleaned_title, options_str, valid_imgs
+
 
 
 class TikuFallback(Tiku):
@@ -1014,83 +1171,55 @@ class AI(Tiku):
             client = OpenAI(http_client=httpx_client, base_url = self.endpoint,api_key = self.key)
         else:
             client = OpenAI(base_url = self.endpoint,api_key = self.key)
-        # 去除选项字母，防止大模型直接输出字母而非内容
-        options_list = q_info['options'].split('\n')
-        cleaned_options = [re.sub(r"^[A-Z]\s*", "", option) for option in options_list]
-        options = "\n".join(cleaned_options)
+
+        # 提取、下载并处理图片，保持绝对的出现顺序与对应编号
+        cleaned_title, options, downloaded_imgs = self.process_question_images(q_info)
+
+        system_prompts = {
+            "single": "本题为单选题，你只能选择一个选项，请根据题目和选项回答问题，以json格式输出正确的选项内容，示例回答：{\"Answer\": [\"答案\"]}。除此之外不要输出任何多余的内容，也不要使用MD语法。如果你使用了互联网搜索，也请不要返回搜索的结果和参考资料",
+            "multiple": "本题为多选题，你必须选择两个或以上选项，请根据题目和选项回答问题，以json格式输出正确的选项内容，示例回答：{\"Answer\": [\"答案1\",\n\"答案2\",\n\"答案3\"]}。除此之外不要输出任何多余的内容，也不要使用MD语法。如果你使用了互联网搜索，也请不要返回搜索的结果和参考资料",
+            "completion": "本题为填空题，你必须根据语境和相关知识填入合适的内容，请根据题目回答问题，以json格式输出正确的答案，示例回答：{\"Answer\": [\"答案\"]}。除此之外不要输出任何多余的内容，也不要使用MD语法。如果你使用了互联网搜索，也请不要返回搜索的结果和参考资料",
+            "judgement": "本题为判断题，你只能回答正确或者错误，请根据题目回答问题，以json格式输出正确的答案，示例回答：{\"Answer\": [\"正确\"]}。除此之外不要输出任何多余的内容，也不要使用MD语法。如果你使用了互联网搜索，也请不要返回搜索的结果和参考资料",
+            "shortanswer": "本题为简答题，你必须根据语境和相关知识填入合适的内容，请根据题目回答问题，以json格式输出正确的答案，示例回答：{\"Answer\": [\"这是我的答案\"]}。除此之外不要输出任何多余的内容，也不要使用MD语法。如果你使用了互联网搜索，也请不要返回搜索的结果和参考资料"
+        }
+
+        q_type = q_info['type']
+        system_content = system_prompts.get(q_type, system_prompts["shortanswer"])
+
+        if q_type in ["single", "multiple"]:
+            user_text = f"题目：{cleaned_title}\n选项：{options}"
+        else:
+            user_text = f"题目：{cleaned_title}"
+
+        if downloaded_imgs:
+            user_content = [{"type": "text", "text": user_text}]
+            for img in downloaded_imgs:
+                user_content.append({
+                    "type": "image_url",
+                    "image_url": {
+                        "url": f"data:{img['mime']};base64,{img['base64']}"
+                    }
+                })
+        else:
+            user_content = user_text
+
         # 判断题目类型
         self._wait_for_interval()
         self.last_request_time = time.time()
-        if q_info['type'] == "single":
-            completion = client.chat.completions.create(**self._completion_kwargs(
-                model = self.model,
-                messages=[
-                    {
-                        "role": "system",
-                        "content": "本题为单选题，你只能选择一个选项，请根据题目和选项回答问题，以json格式输出正确的选项内容，示例回答：{\"Answer\": [\"答案\"]}。除此之外不要输出任何多余的内容，也不要使用MD语法。如果你使用了互联网搜索，也请不要返回搜索的结果和参考资料"
-                    },
-                    {
-                        "role": "user",
-                        "content": f"题目：{q_info['title']}\n选项：{options}"
-                    }
-                ]
-            ))
-        elif q_info['type'] == 'multiple':
-            completion = client.chat.completions.create(**self._completion_kwargs(
-                model = self.model,
-                messages=[
-                    {
-                        "role": "system",
-                        "content": "本题为多选题，你必须选择两个或以上选项，请根据题目和选项回答问题，以json格式输出正确的选项内容，示例回答：{\"Answer\": [\"答案1\",\n\"答案2\",\n\"答案3\"]}。除此之外不要输出任何多余的内容，也不要使用MD语法。如果你使用了互联网搜索，也请不要返回搜索的结果和参考资料"
-                    },
-                    {
-                        "role": "user",
-                        "content": f"题目：{q_info['title']}\n选项：{options}"
-                    }
-                ]
-            ))
-        elif q_info['type'] == 'completion':
-            completion = client.chat.completions.create(**self._completion_kwargs(
-                model = self.model,
-                messages=[
-                    {
-                        "role": "system",
-                        "content": "本题为填空题，你必须根据语境和相关知识填入合适的内容，请根据题目回答问题，以json格式输出正确的答案，示例回答：{\"Answer\": [\"答案\"]}。除此之外不要输出任何多余的内容，也不要使用MD语法。如果你使用了互联网搜索，也请不要返回搜索的结果和参考资料"
-                    },
-                    {
-                        "role": "user",
-                        "content": f"题目：{q_info['title']}"
-                    }
-                ]
-            ))
-        elif q_info['type'] == 'judgement':
-            completion = client.chat.completions.create(**self._completion_kwargs(
-                model = self.model,
-                messages=[
-                    {
-                        "role": "system",
-                        "content": "本题为判断题，你只能回答正确或者错误，请根据题目回答问题，以json格式输出正确的答案，示例回答：{\"Answer\": [\"正确\"]}。除此之外不要输出任何多余的内容，也不要使用MD语法。如果你使用了互联网搜索，也请不要返回搜索的结果和参考资料"
-                    },
-                    {
-                        "role": "user",
-                        "content": f"题目：{q_info['title']}"
-                    }
-                ]
-            ))
-        else:
-            completion = client.chat.completions.create(**self._completion_kwargs(
-                model = self.model,
-                messages=[
-                    {
-                        "role": "system",
-                        "content": "本题为简答题，你必须根据语境和相关知识填入合适的内容，请根据题目回答问题，以json格式输出正确的答案，示例回答：{\"Answer\": [\"这是我的答案\"]}。除此之外不要输出任何多余的内容，也不要使用MD语法。如果你使用了互联网搜索，也请不要返回搜索的结果和参考资料"
-                    },
-                    {
-                        "role": "user",
-                        "content": f"题目：{q_info['title']}"
-                    }
-                ]
-            ))
+
+        completion = client.chat.completions.create(**self._completion_kwargs(
+            model = self.model,
+            messages=[
+                {
+                    "role": "system",
+                    "content": system_content
+                },
+                {
+                    "role": "user",
+                    "content": user_content
+                }
+            ]
+        ))
 
         try:
             response = json.loads(remove_md_json_wrapper(completion.choices[0].message.content))
@@ -1180,16 +1309,37 @@ class SiliconFlow(Tiku):
             "Content-Type": "application/json"
         }
 
+        # 提取、下载并处理图片，保持绝对的出现顺序与对应编号
+        cleaned_title, options, downloaded_imgs = self.process_question_images(q_info)
+
         # 构造系统提示词
-        system_prompt = ""
-        if q_info['type'] == "single":
-            system_prompt = "本题为单选题，请根据题目和选项选择唯一正确答案，输出的是选项的具体内容，而不是内容前的ABCD，并以JSON格式输出：示例回答：{\"Answer\": [\"正确选项内容\"]}。除此之外不要输出任何多余的内容，也不要使用MD语法。如果你使用了互联网搜索，也请不要返回搜索的结果和参考资料"
-        elif q_info['type'] == 'multiple':
-            system_prompt = "本题为多选题，请选择所有正确选项，输出的是选项的具体内容，而不是内容前的ABCD，以JSON格式输出：示例回答：{\"Answer\": [\"选项1\",\"选项2\"]}。除此之外不要输出任何多余的内容，也不要使用MD语法。如果你使用了互联网搜索，也请不要返回搜索的结果和参考资料"
-        elif q_info['type'] == 'completion':
-            system_prompt = "本题为填空题，请直接给出填空内容，以JSON格式输出：示例回答：{\"Answer\": [\"答案文本\"]}。除此之外不要输出任何多余的内容，也不要使用MD语法。如果你使用了互联网搜索，也请不要返回搜索的结果和参考资料"
-        elif q_info['type'] == 'judgement':
-            system_prompt = "本题为判断题，请回答'正确'或'错误'，以JSON格式输出：示例回答：{\"Answer\": [\"正确\"]}。除此之外不要输出任何多余的内容，也不要使用MD语法。如果你使用了互联网搜索，也请不要返回搜索的结果和参考资料"
+        system_prompts = {
+            "single": "本题为单选题，请根据题目和选项选择唯一正确答案，输出的是选项的具体内容，而不是内容前的ABCD，并以JSON格式输出：示例回答：{\"Answer\": [\"正确选项内容\"]}。除此之外不要输出任何多余的内容，也不要使用MD语法。如果你使用了互联网搜索，也请不要返回搜索的结果和参考资料",
+            "multiple": "本题为多选题，请选择所有正确选项，输出的是选项的具体内容，而不是内容前的ABCD，以JSON格式输出：示例回答：{\"Answer\": [\"选项1\",\"选项2\"]}。除此之外不要输出任何多余的内容，也不要使用MD语法。如果你使用了互联网搜索，也请不要返回搜索的结果和参考资料",
+            "completion": "本题为填空题，请直接给出填空内容，以JSON格式输出：示例回答：{\"Answer\": [\"答案文本\"]}。除此之外不要输出任何多余的内容，也不要使用MD语法。如果你使用了互联网搜索，也请不要返回搜索的结果和参考资料",
+            "judgement": "本题为判断题，请回答'正确'或'错误'，以JSON格式输出：示例回答：{\"Answer\": [\"正确\"]}。除此之外不要输出任何多余的内容，也不要使用MD语法。如果你使用了互联网搜索，也请不要返回搜索的结果和参考资料",
+            "shortanswer": "本题为简答题，请根据题目给出回答内容，以JSON格式输出：示例回答：{\"Answer\": [\"回答文本\"]}。除此之外不要输出任何多余的内容，也不要使用MD语法。如果你使用了互联网搜索，也请不要返回搜索的结果和参考资料"
+        }
+
+        q_type = q_info['type']
+        system_prompt = system_prompts.get(q_type, system_prompts["shortanswer"])
+
+        if q_type in ["single", "multiple"]:
+            user_text = f"题目：{cleaned_title}\n选项：{options}"
+        else:
+            user_text = f"题目：{cleaned_title}"
+
+        if downloaded_imgs:
+            user_content = [{"type": "text", "text": user_text}]
+            for img in downloaded_imgs:
+                user_content.append({
+                    "type": "image_url",
+                    "image_url": {
+                        "url": f"data:{img['mime']};base64,{img['base64']}"
+                    }
+                })
+        else:
+            user_content = user_text
 
         # 构造请求体
         payload = {
@@ -1201,7 +1351,7 @@ class SiliconFlow(Tiku):
                 },
                 {
                     "role": "user",
-                    "content": f"题目：{q_info['title']}\n选项：{q_info['options']}"
+                    "content": user_content
                 }
             ],
             "stream": False,

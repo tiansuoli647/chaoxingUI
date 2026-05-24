@@ -498,6 +498,36 @@ def format_time(num, suffix='', divisor=''):
 
 def main():
     """主程序入口"""
+    import atexit
+    
+    def cleanup_local_images():
+        """
+        清理本地可能下载或缓存的所有图片文件
+        """
+        try:
+            import glob
+            import os
+            # 递归查找当前目录下的所有图片格式文件
+            extensions = ['*.png', '*.jpg', '*.jpeg', '*.gif', '*.bmp', '*.webp']
+            count = 0
+            # 避开隐藏文件夹和依赖环境包
+            for root, dirs, files in os.walk('.'):
+                if any(ignored in root for ignored in ['.git', '.deepseek', '.github', '__pycache__', 'venv', '.venv']):
+                    continue
+                for ext in extensions:
+                    for filepath in glob.glob(os.path.join(root, ext)):
+                        try:
+                            os.remove(filepath)
+                            count += 1
+                        except Exception:
+                            pass
+            if count > 0:
+                logger.info(f"任务结束，已自动清理 {count} 个本地临时图片文件")
+        except Exception:
+            pass
+
+    atexit.register(cleanup_local_images)
+
     try:
         # 初始化配置
         common_config, tiku_config, notification_config = init_config()

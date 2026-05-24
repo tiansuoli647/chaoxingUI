@@ -507,8 +507,20 @@ def _extract_choices(element, font_decoder=None) -> str:
     if not element:
         return ""
         
-    # 提取aria-label属性值作为选项，解决#474
-    choice = element.get("aria-label") or element.get_text()
+    # 如果选项中包含图片，我们解析出包含图片标签的内容
+    if element.find("img"):
+        content = []
+        for item in element.descendants:
+            if isinstance(item, NavigableString):
+                content.append(item.string or "")
+            elif item.name == "img":
+                img_url = item.get("src", "")
+                content.append(f'<img src="{img_url}">')
+        choice = "".join(content)
+    else:
+        # 提取aria-label属性值作为选项，解决#474
+        choice = element.get("aria-label") or element.get_text()
+        
     if not choice:
         return ""
 
